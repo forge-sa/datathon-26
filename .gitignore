@@ -40,3 +40,6 @@ config/tuned.yaml.bak
 Thumbs.db
 .vscode/
 .idea/
+
+# --- Claude Code local state (from the original repo) ---
+.claude/
