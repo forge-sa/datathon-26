@@ -1,0 +1,15 @@
+# torch/torchvision must come from the CUDA 12.8 index (RTX 50xx / sm_120):
+#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+fastapi
+uvicorn[standard]
+python-multipart
+av
+opencv-python-headless
+numpy
+pillow
+pydantic
+pyyaml
+httpx
+openpyxl
+transformers
+accelerate

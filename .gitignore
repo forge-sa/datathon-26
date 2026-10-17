@@ -1,0 +1,42 @@
+# --- Python environment ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# --- Models and weights (never pushed; Qwen comes from `ollama pull`, RT-DETR from Hugging Face) ---
+models/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.ckpt
+runs/lora/
+hf_cache/
+.cache/huggingface/
+
+# --- Runtime data ---
+# VLM answer cache
+cache/
+# uploaded videos and results of the web service
+jobs/
+# eval / tuning outputs (reproducible with tools/eval.py)
+runs/
+# exported fine-tuning data
+data/sft/
+
+# --- Dataset videos (559 MB, organiser data) ---
+open_data/
+*.mov
+*.mp4
+
+# --- Local config / OS / editors ---
+config/tuned.yaml.bak
+.env
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

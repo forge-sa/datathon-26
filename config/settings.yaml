@@ -1,0 +1,77 @@
+# Runtime settings. Reloaded at the start of every job, so edits (or config/tuned.yaml written by
+# tools/tune.py --apply) take effect without restarting the server.
+
+vlm:
+  backend: ollama            # ollama | openai (llama-server / any OpenAI-compatible endpoint)
+  url: http://127.0.0.1:11434
+  model: qwen3-vl:8b-instruct   # NOT qwen3-vl:8b - that tag is the "thinking" variant (slow, ignores think=false)
+  temperature: 0.0
+  num_ctx: 6144             # 6144 keeps the 8B model 100% on the GPU (8192 spills ~18% to CPU)
+  max_tokens: 700            # cap on generated tokens per call
+  timeout_sec: 120
+  sec_per_call_init: 2.0     # initial guess; replaced at runtime by a moving average
+
+budget:
+  job_deadline_sec: 240      # measured from upload; the jury limit is 300
+  reserve_sec: 20            # time kept for evidence frames / response
+
+decode:
+  fps: 5.0                   # frames kept in memory (JPEG) for every later stage
+
+timeline:                    # workplace-state samples (main detector, app/timeline.py)
+  every_sec: 1.5             # default sampling interval (tiers override)
+  max_samples: 60            # long videos: interval grows so samples stay <= this
+  room_width: 352            # whole-room image width sent to the VLM
+  crop_width: 640            # enlarged desk crop width
+  personal_min_samples: 2    # personal items seen in >= N samples (one missed sample allowed in a run)
+  safe_min_samples: 4        # safe open in >= N consecutive samples (~6 s)
+
+scan:                        # open-ended scan windows (types the state rules don't cover)
+  window_sec: 10.0
+  stride_sec: 10.0
+  fps: 1.0
+  frame_width: 352           # VLM input width; height keeps aspect, both rounded to 32
+
+verify:                      # targeted checks of candidates (onset refinement, yes/no re-check)
+  fps: 2.0
+  pad_before_sec: 4.0
+  pad_after_sec: 4.0
+  frame_width: 384
+  max_events: 4
+
+perception:
+  enabled: true              # person boxes on evidence frames
+  rules: false               # person-count heuristics over the whole video (noisy; off by default)
+  device: cpu                # keep RT-DETR off the GPU: the 8B VLM needs all 12 GB (see app/perception.py)
+  model: PekingU/rtdetr_r50vd
+  fps: 2.0
+  person_score: 0.5
+  min_absence_sec: 3.0
+  crowd_min_people: 3
+  crowd_min_sec: 2.0
+
+fusion:
+  merge_gap_sec: 5.0
+  candidate_min_score: 0.3   # below this a candidate gets no targeted check
+  max_violations: 3
+  weights:
+    scan: 0.6                # a scan hit alone scores 0.6 * its confidence
+    rule: 0.5
+    support: 0.1             # bonus when several scan windows agree
+    verify: 0.5              # how much a positive check raises the score
+  verify_fail_penalty: 0.5   # score multiplier when the check says "not visible"
+  verify_alone: 0.8          # a positive check alone scores at least 0.8 * its confidence
+  thresholds:
+    default: 0.5
+    other: 0.75
+  use_onset: false           # true: report the refined onset (cashier stands up) instead of the state time
+  time_offset: {}            # per-type seconds added to the reported time (tools/tune.py fits it)
+
+# Degradation tiers, tried in order; the first whose estimated cost fits the remaining budget is
+# used. Cost = estimated VLM calls * seconds per call * max(1, active_jobs / ollama_parallel).
+tiers:
+  - {name: full,    state_every_sec: 1.5, scan: true,  verify: true}
+  - {name: lighter, state_every_sec: 2.5, scan: true,  verify: true}
+  - {name: light,   state_every_sec: 3.5, scan: false, verify: true}
+  - {name: minimal, state_every_sec: 5.0, scan: false, verify: false}
+ollama_parallel: 1           # must match OLLAMA_NUM_PARALLEL (2 does not fit next to the 8B model in 12 GB)

@@ -1,0 +1,112 @@
+# Per-clip annotations on top of open_labels.xlsx (which only says "violation at second N").
+# type:  taxonomy id (config/taxonomy.yaml). DRAFT - confirm by watching each clip; used to score
+#        classification in tools/eval.py. 'unknown' = not decided yet.
+# setup: camera setup id from tools/setups.py (check runs/setups.jpg), used for leave-one-setup-out
+#        tuning in tools/tune.py.
+# note:  free text.
+clips:
+  X-1:
+    type: cash_left_on_desk
+    setup: S1
+  X-2:
+    type: personal_items_phone
+    note: unsure; maybe cash handling
+    setup: S1
+  X-3:
+    setup: S1
+  X-4:
+    type: cash_left_on_desk
+    note: same file as X-47 (labels 57 s and 68 s)
+    setup: S1
+  X-5:
+    setup: S1
+  X-8:
+    setup: S1
+  X-10:
+    setup: S2
+  X-11:
+    type: left_workplace_unsecured
+    setup: S1
+  X-12:
+    setup: S1
+  X-13:
+    type: safe_left_open
+    setup: S2
+  X-14:
+    setup: S1
+  X-15:
+    type: left_workplace_unsecured
+    setup: S2
+  X-16:
+    setup: S2
+  X-17:
+    type: collector_bag_unchecked
+    setup: S2
+  X-18:
+    type: outsider_in_cash_area
+    setup: S2
+  X-19:
+    setup: S2
+  X-20:
+    type: personal_items_phone
+    note: safe may also be open
+    setup: S2
+  X-21:
+    setup: S2
+  X-22:
+    type: left_workplace_unsecured
+    setup: S2
+  X-23:
+    setup: S2
+  X-24:
+    type: left_workplace_unsecured
+    setup: S2
+  X-25:
+    setup: S2
+  X-26:
+    type: left_workplace_unsecured
+    setup: S2
+  X-27:
+    setup: S2
+  X-28:
+    type: left_workplace_unsecured
+    setup: S2
+  X-29:
+    setup: S2
+  X-30:
+    type: outsider_in_cash_area
+    setup: S2
+  X-31:
+    setup: S2
+  X-32:
+    type: unknown
+    setup: S2
+  X-33:
+    type: unknown
+    setup: S2
+  X-34:
+    type: outsider_in_cash_area
+    setup: S2
+  X-35:
+    setup: S2
+  X-37:
+    setup: S2
+  X-38:
+    type: outsider_in_cash_area
+    setup: S2
+  X-39:
+    setup: S2
+  X-40:
+    type: personal_items_phone
+    setup: S2
+  X-43:
+    setup: S3
+  X-44:
+    type: personal_items_phone
+    note: unsure
+    setup: S3
+  X-45:
+    setup: S2
+  X-46:
+    type: personal_items_phone
+    setup: S3

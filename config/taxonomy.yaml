@@ -1,0 +1,84 @@
+# Violation taxonomy. `definition` and `not_violation` are shown to the VLM (English works best
+# for Qwen). `name_ru` / `why_ru` go into the Russian description. `clauses` are ids from
+# regulations.yaml; the description cites them verbatim, the model never writes citations.
+#
+# To add a type: add an entry here (and its clauses in regulations.yaml). No code changes needed.
+
+types:
+  - id: left_workplace_unsecured
+    name_ru: "Кассир покинул рабочее место, оставив ценности без присмотра"
+    definition: >-
+      The cashier stands up and walks away from the cash desk while valuables stay unsecured:
+      cash or a cash bag left on the desk, the safe / cash drawer left open, or the computer
+      screen left unlocked showing a working application.
+    not_violation: >-
+      The cashier first puts cash away, closes the safe and locks the computer (lock screen
+      visible), then leaves. Leaving an empty, tidy desk is normal.
+    why_ru: "Ценности, кроме денег обслуживаемого клиента, должны храниться в запираемом хранилище; рабочее место нельзя оставлять без присмотра с открытым доступом к деньгам."
+    # verified by a dedicated check: when does the cashier leave + what state is the desk left in
+    check: desk_state
+    clauses: [nbrk231_cash_on_desk, nbrk231_leave_workplace]
+
+  - id: outsider_in_cash_area
+    name_ru: "Посторонний в кассовой зоне"
+    definition: >-
+      A person who is not the cashier enters the cashier's side of the counter, the cash room
+      or approaches the safe / cash on the cashier's side, or stays there.
+    not_violation: >-
+      A client sitting or standing on the client side of the desk (facing the cashier across the
+      desk), or a collector handing over a bag across the counter. A visitor talking to the
+      cashier from the client side is normal.
+    why_ru: "Доступ посторонних лиц в кассовое помещение и к ценностям ограничен."
+    clauses: [nbrk231_access, nbrk14_cash_room]
+
+  - id: personal_items_phone
+    name_ru: "Личные вещи, телефон или еда на рабочем месте кассира"
+    definition: >-
+      The cashier uses a mobile phone, or personal items (handbag, phone, food, drink, cups)
+      are placed on the cash desk next to the money while cash operations are done.
+    not_violation: >-
+      Work equipment only: computer, money counter, stamps, documents, calculator.
+    why_ru: "Личные вещи и наличные деньги кассира должны храниться вне кассы."
+    clauses: [nbrk231_personal_items, nbrk231_phone]
+
+  - id: cash_left_on_desk
+    name_ru: "Наличные оставлены на столе / нарушение порядка работы с наличными при клиенте"
+    definition: >-
+      Cash that does not belong to the current client operation is left lying open on the desk,
+      or banknotes are handed out / taken without recounting them in front of the client.
+    not_violation: >-
+      Counting the current client's cash on the desk and then putting it away or handing it over.
+    why_ru: "На рабочем месте допускаются только деньги обслуживаемого клиента; пересчёт производится в присутствии клиента."
+    clauses: [nbrk231_cash_on_desk, nbrk231_recount]
+
+  - id: collector_bag_unchecked
+    name_ru: "Инкассаторская сумка принята без проверки"
+    definition: >-
+      A collector (cash-in-transit courier) hands over a bag or sealed package and the cashier
+      takes it without inspecting the bag and its seal.
+    not_violation: >-
+      The cashier visibly turns the bag around and inspects the seal before accepting it.
+    why_ru: "При приёме сумки проверяется её целостность и целостность пломбы."
+    clauses: [nbrk231_collector_bag]
+
+  - id: safe_left_open
+    name_ru: "Сейф оставлен открытым"
+    definition: >-
+      The safe or cash drawer door stays open while nobody is using it, or is left open when
+      the cashier turns away or leaves.
+    not_violation: >-
+      The safe is opened briefly to take or store cash and then closed.
+    why_ru: "Ценности должны храниться в закрытом (запертом) хранилище."
+    clauses: [nbrk231_cash_on_desk]
+
+  # Catch-all for unseen types. Needs a higher threshold and must pass the verify pass.
+  - id: other
+    name_ru: "Иное возможное нарушение кассовой дисциплины"
+    definition: >-
+      Any other clearly visible breach of cash-handling security not covered above
+      (e.g. cash passed to an unauthorised person, money hidden in clothes, cash room door
+      left open, camera covered).
+    not_violation: >-
+      Routine work. Do not report anything you are not sure about.
+    why_ru: "Действие противоречит общим требованиям к сохранности ценностей при ведении кассовых операций."
+    clauses: [nbrk231_cash_on_desk]

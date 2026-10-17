@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кассовый аудит — проверка видео</title>
+<style>
+  :root {
+    --bg: #f4f5f2; --panel: #ffffff; --ink: #1b1d1a; --muted: #6b6f68; --line: #e1e3dd;
+    --accent: #0f6b4f; --bad: #b3261e; --bad-bg: #fbe9e7; --ok: #1d6b2f; --ok-bg: #e6f2e7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
+           display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .health { font-size: 13px; color: var(--muted); }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; display: grid;
+         grid-template-columns: minmax(280px, 380px) 1fr; gap: 24px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px 12px; text-align: center;
+          color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop.over { border-color: var(--accent); background: #eef6f2; }
+  .drop strong { color: var(--ink); }
+  button { font: inherit; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--accent);
+           background: var(--accent); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: transparent; color: var(--accent); }
+  video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; margin-top: 12px; }
+  .status { margin-top: 12px; font-size: 14px; color: var(--muted); min-height: 1.5em; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line);
+             border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;
+             vertical-align: -1px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .verdict { padding: 14px 16px; border-radius: 10px; font-weight: 600; font-size: 17px; margin-bottom: 16px; }
+  .verdict.bad { background: var(--bad-bg); color: var(--bad); }
+  .verdict.ok { background: var(--ok-bg); color: var(--ok); }
+  .note { font-size: 13px; color: var(--muted); margin: -8px 0 16px; }
+  .viol { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; background: var(--panel); }
+  .viol h3 { margin: 0 0 6px; font-size: 16px; }
+  .meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
+  .tc { font-variant-numeric: tabular-nums; padding: 3px 9px; font-size: 13px; }
+  .desc { margin: 10px 0; }
+  .frames { display: flex; gap: 8px; overflow-x: auto; }
+  .frames figure { margin: 0; flex: 0 0 auto; }
+  .frames img { height: 220px; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  .frames figcaption { font-size: 12px; color: var(--muted); text-align: center; }
+  .rules { font-size: 13px; background: #f7f8f5; border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
+  .rules a { color: var(--accent); }
+  details { margin-top: 18px; }
+  details pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #f7f8f5;
+                padding: 10px; border-radius: 8px; max-height: 480px; overflow: auto; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  .zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; align-items: center;
+          justify-content: center; z-index: 10; cursor: zoom-out; }
+  .zoom img { max-width: 95vw; max-height: 95vh; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Кассовый аудит · проверка видео</h1>
+  <span class="health" id="health">проверка сервиса…</span>
+</header>
+<main>
+  <section>
+    <div class="panel">
+      <div class="drop" id="drop">
+        <strong>Перетащите видео .mov</strong><br>или нажмите, чтобы выбрать файл
+        <input type="file" id="file" accept=".mov,.mp4,video/*" hidden>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button id="go" disabled>Проверить</button>
+        <button id="reset" class="ghost" hidden>Новая проверка</button>
+      </div>
+      <div class="status" id="status"></div>
+      <video id="player" controls hidden playsinline></video>
+    </div>
+  </section>
+  <section id="result"><div class="panel empty">Загрузите видео, чтобы увидеть результат анализа.</div></section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let file = null, jobId = null, timer = null;
+
+fetch('/health').then(r => r.json()).then(h => {
+  $('health').textContent = h.ok ? `модель ${h.model} готова` : `внимание: ${h.vlm}`;
+  $('health').style.color = h.ok ? '' : 'var(--bad)';
+}).catch(() => $('health').textContent = 'сервис недоступен');
+
+function pick(f) {
+  if (!f) return;
+  file = f;
+  $('drop').innerHTML = `<strong>${f.name}</strong><br>${(f.size / 1048576).toFixed(1)} МБ`;
+  $('go').disabled = false;
+  const p = $('player');
+  p.src = URL.createObjectURL(new Blob([f], { type: 'video/mp4' }));
+  p.hidden = false;
+}
+$('drop').onclick = () => $('file').click();
+$('file').onchange = (e) => pick(e.target.files[0]);
+['dragover', 'dragenter'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop', e => pick(e.dataTransfer.files[0]));
+$('reset').onclick = () => location.reload();
+
+$('go').onclick = async () => {
+  $('go').disabled = true;
+  setStatus('Загрузка файла…', true);
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/ui/api/analyze', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    jobId = j.job_id;
+    const t0 = Date.now();
+    timer = setInterval(() => poll(t0), 1500);
+  } catch (e) { setStatus('Ошибка загрузки: ' + e.message); $('go').disabled = false; }
+};
+
+function setStatus(text, busy) {
+  $('status').innerHTML = (busy ? '<span class="spinner"></span>' : '') + text;
+}
+
+async function poll(t0) {
+  const r = await fetch(`/ui/api/jobs/${jobId}`);
+  const j = await r.json();
+  const sec = Math.round((Date.now() - t0) / 1000);
+  if (j.status === 'processing') { setStatus(`Обработка: ${j.progress || ''} · ${sec} с`, true); return; }
+  clearInterval(timer);
+  $('reset').hidden = false;
+  if (j.status === 'failed') { setStatus('Ошибка обработки: ' + j.error); return; }
+  setStatus(`Готово за ${j.processing_sec ?? sec} с · задание ${jobId}`);
+  render(j);
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function fmt(t) { const m = Math.floor(t / 60), s = (t % 60).toFixed(1).padStart(4, '0'); return `${m}:${s}`; }
+function seek(t) { const p = $('player'); p.currentTime = t; p.pause(); p.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function zoom(src) { const d = document.createElement('div'); d.className = 'zoom'; d.innerHTML = `<img src="${src}">`; d.onclick = () => d.remove(); document.body.appendChild(d); }
+
+function render(j) {
+  const bad = j.verdict === 'violation';
+  let html = `<div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? 'Обнаружены признаки возможных нарушений' : 'Нарушение не обнаружено'}</div>
+    <p class="note">Результат — подсказка для проверяющего, а не окончательное заключение.</p>`;
+  for (const v of j.violations) {
+    const frames = v.evidence_frames.map(f => `<figure><img src="data:image/jpeg;base64,${f.image_base64}" onclick="zoom(this.src)">
+      <figcaption>${fmt(f.timestamp_sec)}</figcaption></figure>`).join('');
+    const rules = (v.rules || []).map(r => `<div><b>${esc(r.act)}</b>, ${esc(r.point)}${r.quote ? ': «' + esc(r.quote) + '»' : ''}
+      ${r.url ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener">источник</a>` : ''}</div>`).join('');
+    html += `<div class="viol">
+      <h3>${esc(v.type)}</h3>
+      <div class="meta"><button class="tc ghost" onclick="seek(${v.timecode_sec})">▶ ${fmt(v.timecode_sec)}</button>
+        <span>уверенность ${(v.confidence * 100).toFixed(0)}%</span></div>
+      <p class="desc">${esc(v.description)}</p>
+      <div class="frames">${frames}</div>
+      ${rules ? `<div class="rules">${rules}</div>` : ''}
+    </div>`;
+  }
+  html += `<details id="dbg"><summary>Технические детали (для настройки)</summary><pre id="dbgpre">загрузка…</pre></details>
+    <details><summary>JSON ответа API</summary><pre>${esc(JSON.stringify(j, (k, v) => k === 'image_base64' ? v.slice(0, 40) + '…' : v, 1))}</pre></details>`;
+  $('result').innerHTML = html;
+  $('dbg').addEventListener('toggle', async () => {
+    const d = await (await fetch(`/ui/api/jobs/${jobId}/debug`)).json();
+    $('dbgpre').textContent = JSON.stringify(d, null, 1);
+  }, { once: true });
+}
+</script>
+</body>
+</html>

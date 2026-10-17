@@ -1,0 +1,15 @@
+# written by tools/tune.py --run tl4; delete to fall back to settings.yaml
+fusion:
+  thresholds:
+    default: 0.7
+    other: 0.8
+    outsider_in_cash_area: 0.3
+  weights:
+    scan: 0.4
+    rule: 0.5
+    support: 0.1
+    verify: 0.3
+  verify_fail_penalty: 1.0
+  verify_alone: 0.8
+  use_onset: true
+  time_offset: {}

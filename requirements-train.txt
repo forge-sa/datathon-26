@@ -1,0 +1,4 @@
+# Only for tools/train_lora.py (optional fine-tuning)
+peft
+bitsandbytes
+qwen-vl-utils
