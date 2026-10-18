@@ -145,3 +145,62 @@ VERIFY_SCHEMA = {
     },
     "required": ["observation", "visible", "confidence", "first_frame", "explanation_ru"],
 }
+
+HANDS_QUESTION = (
+    "Image 1 is the whole room, image 2 a close-up of the cash desk at the same moment. Up to two people sit at "
+    "the desk: the CASHIER on the working side (the laptop screen faces her; depending on the camera she may have "
+    "her back to the camera), and a CLIENT on the opposite side, facing the cashier. Look at each person's hands "
+    "separately and do not mix them up.\n"
+    "- `client_present`: a client is at the opposite side of the desk;\n"
+    "- `client_holding`: what the client holds ([\"nothing\"] if no client or empty hands);\n"
+    "- `cashier_holding`: what the CASHIER holds ([\"nothing\"] if empty hands or not visible). A smartphone is "
+    "`mobile_phone`; paper money is `banknotes`; a bank card, passport or paper is `card_or_document`;\n"
+    "- `cashier_uses_phone`: the CASHIER herself holds or looks at a smartphone (a phone in the client's hands does "
+    "not count; the corded desk telephone does not count);\n"
+    "- `cashier_eats_or_drinks`: the CASHIER drinks from a cup/bottle or eats;\n"
+    "- `coat_or_bag_on_desk`: outerwear (coat, jacket) or a handbag/backpack lies on the desk;\n"
+    "- `loose_cash_on_desk`: banknotes or a bundle of money lie on the desk top and nobody is holding them."
+)
+
+HANDS_ITEMS = ["nothing", "mobile_phone", "banknotes", "coins", "card_or_document", "cup_or_drink", "food",
+               "cash_bag", "other"]
+
+HANDS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "client_present": {"type": "boolean"},
+        "client_holding": {"type": "array", "items": {"type": "string", "enum": HANDS_ITEMS}, "maxItems": 3},
+        "cashier_holding": {"type": "array", "items": {"type": "string", "enum": HANDS_ITEMS}, "maxItems": 3},
+        "cashier_uses_phone": {"type": "boolean"},
+        "cashier_eats_or_drinks": {"type": "boolean"},
+        "coat_or_bag_on_desk": {"type": "boolean"},
+        "loose_cash_on_desk": {"type": "boolean"},
+    },
+    "required": ["client_present", "client_holding", "cashier_holding", "cashier_uses_phone",
+                 "cashier_eats_or_drinks", "coat_or_bag_on_desk", "loose_cash_on_desk"],
+}
+
+# close-up confirmation of a personal-items candidate (phone / food / drink / coat on the desk)
+PERSONAL_CHECK_QUESTION = (
+    "These are close-ups of a bank cashier's desk at consecutive moments. The cashier is the employee on the "
+    "working side of the desk (laptop screen facing them); clients sit on the opposite side. Does the CASHIER "
+    "herself, in any of these frames: hold, look at or type on a personal SMARTPHONE; eat or drink; or keep "
+    "outerwear (coat, jacket) or a handbag on the cash desk? A phone held by the client does not count; the corded "
+    "desk telephone, a bank card, banknotes, a passport or papers are NOT a smartphone.\n"
+    "Answer `observation` (what the cashier's hands hold and what lies on the desk in each frame), `visible`, "
+    "`what` (smartphone / food_or_drink / coat_or_bag / none), `confidence` 0..1, `first_frame` (1-based, 0 if "
+    "none) and `explanation_ru`: one short Russian sentence describing only what is seen."
+)
+
+PERSONAL_CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "observation": {"type": "string"},
+        "visible": {"type": "boolean"},
+        "what": {"type": "string", "enum": ["smartphone", "food_or_drink", "coat_or_bag", "none"]},
+        "confidence": {"type": "number"},
+        "first_frame": {"type": "integer"},
+        "explanation_ru": {"type": "string"},
+    },
+    "required": ["observation", "visible", "what", "confidence", "first_frame", "explanation_ru"],
+}

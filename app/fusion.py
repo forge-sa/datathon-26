@@ -49,6 +49,7 @@ def merge_raw(raw: list[dict], gap: float) -> list[dict]:
             "sources": sorted({e["source"] for e in g["items"]}),
             "issues": sorted({x for e in state for x in e.get("issues", [])}),
             "evidence_t": next((e["evidence_t"] for e in state if e.get("evidence_t") is not None), None),
+            "people": max((e["people"] for e in state if e.get("people") is not None), default=None),
             "what_is_visible": best_scan["what_is_visible"] if best_scan else "",
             "verify": None,     # {visible, confidence, first_frame_t, explanation_ru} from the verify pass
             "onset_t": None,    # refined onset (e.g. the moment the cashier stands up)
@@ -72,6 +73,9 @@ def score_candidate(c: dict, fcfg: dict) -> float:
             s = max(s, fcfg.get("verify_alone", 0.8) * float(v["confidence"]))
         else:
             s *= fcfg.get("verify_fail_penalty", 0.6)
+    if c["type_id"] == "outsider_in_cash_area" and c.get("people") is not None and c["people"] < 2:
+        # only one person ever visible: it is the cashier herself (e.g. at the safe), not an outsider
+        s *= fcfg.get("single_person_factor", 0.3)
     return round(min(1.0, s), 4)
 
 

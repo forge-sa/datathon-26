@@ -17,7 +17,7 @@ from PIL import ImageDraw
 from . import fusion, prompts, timeline
 from .config import load_regulations, load_settings, load_taxonomy
 from .video import FrameStore, decode, resize_for_vlm, to_jpeg
-from .vlm import LATENCY, VLMClient, VLMError
+from .vlm import LATENCY, WALL, VLMClient, VLMError
 
 log = logging.getLogger("pipeline")
 
@@ -38,7 +38,7 @@ class Budget:
         return self.deadline - self.reserve - time.time()
 
     def can_call(self, s: dict, n: int = 1) -> bool:
-        return self.left() > LATENCY.get(s["vlm"]["sec_per_call_init"]) * n
+        return self.left() > WALL.get(s["vlm"]["sec_per_call_init"]) * n
 
 
 def plan_windows(duration: float, window: float, stride: float) -> list[tuple[float, float]]:
@@ -51,7 +51,7 @@ def plan_windows(duration: float, window: float, stride: float) -> list[tuple[fl
 
 def estimate_calls(s: dict, tier: dict, duration: float) -> int:
     tl = {**s["timeline"], "every_sec": tier["state_every_sec"]}
-    calls = 1 + len(timeline.sample_times(duration, tl))
+    calls = 1 + len(timeline.sample_times(duration, tl)) * (2 if tier.get("hands", True) else 1)
     if tier["scan"]:
         calls += len(plan_windows(duration, s["scan"]["window_sec"], s["scan"]["stride_sec"]))
     if tier["verify"]:
@@ -71,7 +71,10 @@ def choose_tier(s: dict, duration: float, budget: Budget, active_jobs: int) -> d
 
 
 def analyze(video_path: str | Path, *, started_at: float | None = None, active_jobs: int = 1,
-            settings: dict | None = None, progress=lambda msg: None, use_cache: bool = True) -> dict:
+            settings: dict | None = None, progress=lambda msg: None, use_cache: bool = True,
+            on_partial=None) -> dict:
+    """`on_partial(result)` (optional) receives a provisional result after the main detector, so the
+    job watchdog has something real to return if a later stage overruns the jury's 5-minute limit."""
     s = settings or load_settings()
     types = load_taxonomy()
     regs = load_regulations()
@@ -121,22 +124,38 @@ def analyze(video_path: str | Path, *, started_at: float | None = None, active_j
         tl_cfg = {**s["timeline"], "every_sec": tier["state_every_sec"]}
         times = timeline.sample_times(store.duration, tl_cfg)
         for n, t in enumerate(times, 1):
-            if not budget.can_call(s, 2):
+            if not budget.can_call(s, 3):
                 debug["warnings"].append(f"state timeline cut at {t:.1f}s (time budget)")
                 break
             progress(f"Состояние рабочего места: {n}/{len(times)}")
             try:
-                states.append(timeline.read_state(vlm, model, store, t, box, s["timeline"]))
+                st = timeline.read_state(vlm, model, store, t, box, s["timeline"])
             except VLMError as e:   # one unreadable sample must not end the timeline
                 debug["warnings"].append(f"state at {t:.1f}s skipped: {str(e)[:120]}")
+                continue
+            if tier.get("hands", True) and st["cashier_at_desk"]:
+                try:
+                    st["hands"] = timeline.read_hands(vlm, model, store, t, box, s["timeline"])
+                except VLMError as e:
+                    debug["warnings"].append(f"hands at {t:.1f}s skipped: {str(e)[:120]}")
+            states.append(st)
     except VLMError as e:
         debug["warnings"].append(f"state timeline failed: {e}")
     debug["desk_box"] = box
     debug["states"] = states
     for c in timeline.derive(states, s["timeline"]):
+        if c["type_id"] == "outsider_in_cash_area" and s["perception"].get("enabled"):
+            _count_people(store, c, s["perception"], debug)
         raw.append({"type_id": c["type_id"], "start": c["t"], "end": c["t_window"][1], "confidence": c["score"],
-                    "source": c["source"], "issues": c["issues"], "evidence_t": c["evidence_t"]})
+                    "source": c["source"], "issues": c["issues"], "evidence_t": c["evidence_t"],
+                    "people": c.get("people")})
     debug["timings"]["timeline"] = round(time.time() - t2, 2)
+    if on_partial is not None:
+        try:
+            prov = fusion.select(fusion.merge_raw([dict(r) for r in raw], s["fusion"]["merge_gap_sec"]), s["fusion"])
+            on_partial(_result(prov, store, types, regs, s, None, with_boxes=False))
+        except Exception:  # the provisional result is a safety net only
+            log.exception("provisional result failed")
 
     # -- open-ended scan (types the state rules don't cover) ----------------------------
     t3 = time.time()
@@ -191,6 +210,15 @@ def analyze(video_path: str | Path, *, started_at: float | None = None, active_j
     debug["candidates"] = cands
 
     # -- output -------------------------------------------------------------------------
+    out = _result(final, store, types, regs, s, track)
+    debug["timings"]["total"] = round(time.time() - budget.started_at, 2)
+    out["debug"] = debug
+    return out
+
+
+def _result(final: list[dict], store: FrameStore, types: dict, regs: dict, s: dict, track,
+            with_boxes: bool = True) -> dict:
+    fcfg = s["fusion"]
     violations = []
     for c in final:
         t = round(max(0.0, min(store.duration, fusion.final_time(c, fcfg))), 1)
@@ -199,18 +227,35 @@ def analyze(video_path: str | Path, *, started_at: float | None = None, active_j
             "type": tdef["name_ru"],
             "timecode_sec": t,
             "description": describe(tdef, c, regs, fcfg),
-            "evidence_frames": evidence_frames(store, t, track, c.get("evidence_t"), s["perception"]),
+            "evidence_frames": evidence_frames(store, t, track, c.get("evidence_t"),
+                                               s["perception"] if with_boxes else None),
             "type_id": c["type_id"],
             "confidence": c["score"],
             "rules": [cite(regs, cid) for cid in tdef.get("clauses", []) if cid in regs["clauses"]],
         })
     violations.sort(key=lambda v: v["timecode_sec"])
-    debug["timings"]["total"] = round(time.time() - budget.started_at, 2)
-    return {
-        "verdict": "violation" if violations else "no_violation",
-        "violations": violations,
-        "debug": debug,
-    }
+    return {"verdict": "violation" if violations else "no_violation", "violations": violations}
+
+
+def _count_people(store: FrameStore, c: dict, pcfg: dict, debug: dict) -> None:
+    """An "outsider" needs a second person. The VLM often calls the cashier herself an outsider when she
+    stands up and goes to the safe (measured: 4 of 6 false alarms in run tl6), so count people with the
+    person detector over the run."""
+    a, b = c["t_window"]
+    times = [a + (b - a) * k / 4 for k in range(5)] if b > a else [a - 0.5, a, a + 0.5]
+    idx = sorted({store.index_at(max(0.0, min(store.duration, t))) for t in times})
+    try:
+        from .perception import detect_people
+        track = detect_people(store, pcfg, idx=idx)
+    except Exception as e:  # noqa: BLE001 - perception is an aid only
+        debug["warnings"].append(f"people count failed: {e}")
+        return
+    # reflections in the glass door / people behind it score ~0.55-0.6, people in the room >= 0.89
+    min_h = float(pcfg.get("min_person_height", 0.12))
+    min_score = float(pcfg.get("count_score", 0.8))
+    counts = [sum(1 for x1, y1, x2, y2, sc in boxes if y2 - y1 >= min_h and sc >= min_score)
+              for boxes in track.boxes]
+    c["people"] = max(counts, default=0)    # fusion.score_candidate weakens single-person candidates
 
 
 def _frames(store: FrameStore, idx: list[int], width: int) -> list[tuple[str, bytes]]:
@@ -242,9 +287,20 @@ def _check(vlm: VLMClient, model: str, s: dict, store: FrameStore, tdef: dict, c
                            "first_frame_t": c["onset_t"], "explanation_ru": "", "state": st}
         return
 
-    idx = store.sample(c["t"] - vc["pad_before_sec"], c["t"] + vc["pad_after_sec"], vc["fps"])
-    out = vlm.chat_json(model, prompts.SYSTEM, _frames(store, idx, vc["frame_width"]),
-                        prompts.verify_question(tdef, len(idx)), prompts.VERIFY_SCHEMA)
+    if tdef.get("check") == "none":
+        return
+    if tdef.get("check") == "personal":
+        # close-ups of the cashier around the candidate: a phone or a cup is a few pixels in the full frame
+        times = [c["t"] - 0.8, c["t"], c["t"] + 0.8, c["t"] + 1.6]
+        idx = sorted({store.index_at(max(0.0, min(store.duration, x))) for x in times})
+        frames = [(f"frame {k + 1}, t={store.times[i]:.1f}s", timeline.crop(store, i, timeline.wide_box(box), 640))
+                  for k, i in enumerate(idx)]
+        out = vlm.chat_json(model, prompts.SYSTEM, frames, prompts.PERSONAL_CHECK_QUESTION,
+                            prompts.PERSONAL_CHECK_SCHEMA)
+    else:
+        idx = store.sample(c["t"] - vc["pad_before_sec"], c["t"] + vc["pad_after_sec"], vc["fps"])
+        out = vlm.chat_json(model, prompts.SYSTEM, _frames(store, idx, vc["frame_width"]),
+                            prompts.verify_question(tdef, len(idx)), prompts.VERIFY_SCHEMA)
     k = int(out.get("first_frame", 0) or 0)
     c["verify"] = {
         "visible": bool(out.get("visible")),
@@ -271,8 +327,12 @@ def _seen_text(c: dict, fcfg: dict) -> str:
     if c["type_id"] == "left_workplace_unsecured" and issues:
         return f"около {t:.1f} с кассир встаёт и уходит с рабочего места; после ухода {', '.join(issues)}"
     if c["type_id"] == "personal_items_phone" and issues:
-        items = ", ".join(ITEM_RU.get(x, x) for x in issues)
-        return f"на рабочем месте кассира во время работы видны личные предметы ({items}), {c['start']:.0f}–{c['end']:.0f} с"
+        acts = [x for x in issues if " " in x]              # phrases from the hands rules
+        items = [ITEM_RU.get(x, x) for x in issues if " " not in x]
+        parts = acts + ([f"на столе кассира видны личные предметы ({', '.join(items)})"] if items else [])
+        return f"{c['start']:.0f}–{c['end']:.0f} с: " + "; ".join(parts)
+    if c["type_id"] == "cash_left_on_desk" and "state:loose_cash" in c.get("sources", []):
+        return f"с {c['start']:.0f} по {c['end']:.0f} с на столе открыто лежат наличные, с которыми никто не работает"
     if c["type_id"] == "safe_left_open" and "state:safe_open" in c.get("sources", []):
         return f"сейф или денежный ящик стоит открытым с {c['start']:.0f} по {c['end']:.0f} с"
     v = (c.get("verify") or {}).get("explanation_ru", "").strip()

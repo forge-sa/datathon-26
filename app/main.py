@@ -2,15 +2,35 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from .config import API_KEY, STATIC_DIR, load_settings
+from .config import API_KEY, STATIC_DIR, load_regulations, load_settings, load_taxonomy
 from .jobs import JobStore, public_view
 from .vlm import ollama_ready
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+
+class _NoPolling(logging.Filter):
+    """Drop the access-log lines of status polling (UI every 1.5 s, jury clients) and health checks;
+    jobs.py logs one line when a job is received and one when it is done."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        polls = ('"GET /ui/api/jobs/', '"GET /api/v1/jobs/', '"GET /health', '"GET /api/v1/health')
+        return not (any(p in msg for p in polls) and '" 200' in msg)
+
+
+logging.getLogger("uvicorn.access").addFilter(_NoPolling())
+logging.getLogger("httpx").setLevel(logging.WARNING)   # one line per VLM call is too much
+if os.environ.get("LOG_FILE"):   # set by run.ps1: the console log is also written to logs/server_*.log
+    _fh = logging.FileHandler(os.environ["LOG_FILE"], encoding="utf-8")
+    _fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    _fh.addFilter(_NoPolling())
+    for _name in ("", "uvicorn", "uvicorn.access"):
+        logging.getLogger(_name).addHandler(_fh)
 
 MAX_UPLOAD = 300 * 1024 * 1024
 ALLOWED = {".mov", ".mp4", ".m4v", ".avi", ".mkv"}
@@ -57,6 +77,11 @@ def get_job(job_id: str):
     return public_view(_job(job_id))
 
 
+@api.get("/health")
+def api_health():
+    return health()
+
+
 # -- UI API (local testing; protect or remove before exposing publicly) ------------------
 ui = APIRouter(prefix="/ui/api")
 
@@ -69,6 +94,31 @@ async def ui_analyze(file: UploadFile = File(...)):
 @ui.get("/jobs/{job_id}")
 def ui_job(job_id: str):
     return public_view(_job(job_id))
+
+
+@ui.get("/jobs")
+def ui_jobs():
+    return store.recent()
+
+
+@ui.get("/catalog")
+def ui_catalog():
+    """Violation types the service detects, with their regulation clauses (UI reference tab)."""
+    regs = load_regulations()
+    types = []
+    for t in load_taxonomy().values():
+        clauses = []
+        for cid in t.get("clauses", []):
+            cl = regs["clauses"].get(cid)
+            if cl:
+                src = regs["sources"].get(cl["source"], {})
+                clauses.append({"act": src.get("title", cl["source"]), "point": cl.get("point", ""),
+                                "quote": cl.get("quote", ""), "url": src.get("url", "")})
+        types.append({"id": t["id"], "name": t["name_ru"], "summary": t.get("summary_ru", ""),
+                      "why": t.get("why_ru", ""), "clauses": clauses})
+    sources = [{"title": s["title"], "url": s.get("url", ""), "version": s.get("version", "")}
+               for s in regs["sources"].values()]
+    return {"types": types, "sources": sources}
 
 
 @ui.get("/jobs/{job_id}/debug")

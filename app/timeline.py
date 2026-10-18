@@ -58,6 +58,33 @@ def read_state(vlm, model: str, store: FrameStore, t: float, box: list[float], c
     }
 
 
+def read_hands(vlm, model: str, store: FrameStore, t: float, box: list[float], cfg: dict) -> dict:
+    """Second, focused question per sample: what the cashier does with her hands (phone, drink,
+    food) and what lies loose on the desk. Uses a wider close-up so the cashier's hands are in it."""
+    i = store.index_at(t)
+    frames = [(f"whole room, t={store.times[i]:.1f}s", to_jpeg(resize_for_vlm(store.image(i), cfg["room_width"]))),
+              (f"cashier and desk close-up, t={store.times[i]:.1f}s",
+               crop(store, i, wide_box(box), cfg.get("hands_width", 768)))]
+    out = vlm.chat_json(model, prompts.SYSTEM, frames, prompts.HANDS_QUESTION, prompts.HANDS_SCHEMA)
+    holding = set(out.get("cashier_holding") or []) - {"nothing"}
+    client_holding = set(out.get("client_holding") or []) - {"nothing"}
+    return {
+        "holding": sorted(holding),
+        "client_holding": sorted(client_holding),
+        # a phone counts only if the cashier holds it and it is not the client's phone seen twice
+        "phone": bool(out.get("cashier_uses_phone")) and "mobile_phone" in holding,
+        "eat_drink": bool(out.get("cashier_eats_or_drinks")),
+        "coat_bag": bool(out.get("coat_or_bag_on_desk")),
+        "loose_cash": bool(out.get("loose_cash_on_desk")),
+        "client": bool(out.get("client_present")),
+    }
+
+
+def wide_box(box: list[float]) -> list[float]:
+    """Desk box grown so the cashier sitting at it (and her hands) are included."""
+    return [max(0.0, box[0] - 0.1), max(0.0, box[1] - 0.12), min(1.0, box[2] + 0.1), min(1.0, box[3] + 0.12)]
+
+
 def unsecured(s: dict) -> list[str]:
     """What is left unsecured in one state sample (Russian phrases for the description)."""
     issues = []
@@ -106,7 +133,7 @@ def derive(states: list[dict], cfg: dict) -> list[dict]:
         if len(run) >= cfg["personal_min_samples"]:
             found = sorted({x for r in run for x in personal(r)})
             cands.append({"type_id": "personal_items_phone", "t": run[0]["t"], "t_window": [run[0]["t"], run[-1]["t"]],
-                          "score": min(0.9, 0.45 + 0.1 * len(run)), "issues": found,
+                          "score": min(0.6, 0.3 + 0.05 * len(run)), "issues": found,
                           "source": "state:personal_items", "evidence_t": run[0]["t"]})
 
     # 3. safe / cash drawer open for a long time
@@ -122,6 +149,44 @@ def derive(states: list[dict], cfg: dict) -> list[dict]:
         cands.append({"type_id": "outsider_in_cash_area", "t": run[0]["t"], "t_window": [run[0]["t"], run[-1]["t"]],
                       "score": min(0.85, 0.15 + 0.2 * len(run)), "issues": [],
                       "source": "state:outsider", "evidence_t": run[0]["t"]})
+
+    # 5. what the cashier does with her hands (focused close-up question, see read_hands)
+    def hands(key):
+        return lambda s: s["cashier_at_desk"] and (s.get("hands") or {}).get(key)
+
+    # min run (consecutive samples) and score per signal, measured on the dataset (tools/eval.py, run tl5):
+    # eat/drink >= 2 and coat/bag >= 3 never occur in no-violation clips; a single "phone" sample is
+    # as common in normal clips (client's phone, card reader) as in violations, so it is weak support only
+    hand_rules = [
+        ("phone", "personal_items_phone", "кассир держит в руках или использует мобильный телефон",
+         cfg.get("phone_min_samples", 3), 0.45),
+        ("eat_drink", "personal_items_phone", "кассир ест или пьёт на рабочем месте",
+         cfg.get("eat_min_samples", 2), 0.85),
+        ("coat_bag", "personal_items_phone", "на кассовом столе лежит верхняя одежда или сумка",
+         cfg.get("coat_min_samples", 3), 0.85),
+    ]
+    for key, type_id, issue, min_len, score in hand_rules:
+        for run in _runs(states, hands(key), gap=0):
+            if len(run) >= min_len:
+                cands.append({"type_id": type_id, "t": run[0]["t"], "t_window": [run[0]["t"], run[-1]["t"]],
+                              "score": score, "issues": [issue], "source": f"state:{key}", "evidence_t": run[0]["t"]})
+
+    # 6. money lying loose on the desk while nobody handles it (several samples in a row)
+    def loose(s):
+        h = s.get("hands") or {}
+        return h.get("loose_cash") and not ({"banknotes", "coins"} & set(h.get("holding", [])))
+
+    for run in _runs(states, loose, gap=0):
+        if len(run) >= cfg.get("cash_min_samples", 4):
+            cands.append({"type_id": "cash_left_on_desk", "t": run[0]["t"], "t_window": [run[0]["t"], run[-1]["t"]],
+                          "score": 0.8,
+                          "issues": ["на столе лежат наличные, с которыми никто не работает"],
+                          "source": "state:loose_cash", "evidence_t": run[0]["t"]})
+
+    # 7. a cash / collector bag in the cashier's hands: candidate for the seal check
+    for run in _runs(states, lambda s: "cash_bag" in (s.get("hands") or {}).get("holding", [])):
+        cands.append({"type_id": "collector_bag_unchecked", "t": run[0]["t"], "t_window": [run[0]["t"], run[-1]["t"]],
+                      "score": 0.35, "issues": [], "source": "state:bag", "evidence_t": run[0]["t"]})
     return cands
 
 

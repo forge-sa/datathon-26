@@ -11,7 +11,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .config import JOBS_DIR
+from .config import JOBS_DIR, load_settings
 from .pipeline import analyze
 
 log = logging.getLogger("jobs")
@@ -24,6 +24,7 @@ class JobStore:
         self.jobs: dict[str, dict] = {}
         self.lock = threading.Lock()
         self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="job")
+        threading.Thread(target=self._watchdog, daemon=True, name="job-watchdog").start()
 
     def active(self) -> int:
         with self.lock:
@@ -41,6 +42,7 @@ class JobStore:
         with self.lock:
             self.jobs[job_id] = job
         self._save(job_id)
+        log.info("job %s: received %s (%.1f MB)", job_id, filename, len(data) / 1048576)
         self.pool.submit(self._run, job_id, path)
         return job_id
 
@@ -50,18 +52,54 @@ class JobStore:
         def progress(msg: str):
             job["progress"] = msg
 
+        def partial(res: dict):
+            job["partial"] = res
+
         try:
-            res = analyze(path, started_at=job["submitted_at"], active_jobs=self.active(), progress=progress)
+            res = analyze(path, started_at=job["submitted_at"], active_jobs=self.active(), progress=progress,
+                          on_partial=partial)
             debug = res.pop("debug")
             (self.root / job_id / "debug.json").write_text(
                 json.dumps(debug, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-            job.update(res, status="done", progress="Готово",
-                       processing_sec=round(time.time() - job["submitted_at"], 1))
+            with self.lock:
+                if job["status"] == "done":     # the watchdog already answered; keep that answer stable
+                    job["late_result"] = res
+                else:
+                    job.update(res, status="done", progress="Готово",
+                               processing_sec=round(time.time() - job["submitted_at"], 1))
+            log.info("job %s: done in %.0f s, tier %s, verdict %s%s", job_id, time.time() - job["submitted_at"],
+                     debug.get("tier"), res["verdict"],
+                     "".join(f"; {v['type_id']}@{v['timecode_sec']}s" for v in res["violations"]))
+            for w in debug.get("warnings", []):
+                log.warning("job %s: %s", job_id, w)
         except Exception as e:  # noqa: BLE001
             log.exception("job %s failed", job_id)
-            job.update(status="failed", error=str(e), progress="Ошибка",
-                       traceback=traceback.format_exc(limit=5))
+            with self.lock:
+                if job["status"] != "done":
+                    job.update(status="failed", error=str(e), progress="Ошибка",
+                               traceback=traceback.format_exc(limit=5))
+        job.pop("partial", None)
         self._save(job_id)
+
+    def _watchdog(self) -> None:
+        """The jury counts a video as unprocessed after 5 minutes. If a job is still running near that
+        limit (GPU contention, a hung VLM call), answer with the provisional result of the main detector."""
+        while True:
+            time.sleep(2.0)
+            try:
+                limit = float(load_settings()["budget"].get("hard_limit_sec", 280))
+            except Exception:  # noqa: BLE001
+                limit = 280.0
+            now = time.time()
+            with self.lock:
+                late = [j for j in self.jobs.values()
+                        if j["status"] == "processing" and now - j["submitted_at"] > limit and j.get("partial")]
+                for job in late:
+                    job.update(job["partial"], status="done", progress="Готово (сокращённый анализ)",
+                               processing_sec=round(now - job["submitted_at"], 1), partial_result=True)
+                    log.warning("job %s: time limit, returned the provisional result", job["job_id"])
+            for job in late:
+                self._save(job["job_id"])
 
     def get(self, job_id: str) -> dict | None:
         with self.lock:
@@ -85,9 +123,22 @@ class JobStore:
         return files[0] if files else None
 
     def _save(self, job_id: str) -> None:
-        job = self.jobs[job_id]
+        job = {k: v for k, v in self.jobs[job_id].items() if k != "partial"}
         (self.root / job_id / "result.json").write_text(
             json.dumps(job, ensure_ascii=False, default=str), encoding="utf-8")
+
+    def recent(self, n: int = 20) -> list[dict]:
+        """Latest jobs (this process and earlier runs on disk), newest first, without frames."""
+        rows = []
+        for d in self.root.iterdir() if self.root.exists() else []:
+            job = self.get(d.name) if (d / "result.json").exists() else None
+            if job:
+                rows.append({"job_id": job["job_id"], "filename": job.get("filename", ""),
+                             "status": job["status"], "verdict": job.get("verdict"),
+                             "n_violations": len(job.get("violations") or []),
+                             "submitted_at": job.get("submitted_at", 0)})
+        rows.sort(key=lambda r: -r["submitted_at"])
+        return rows[:n]
 
 
 def public_view(job: dict) -> dict:
@@ -97,6 +148,8 @@ def public_view(job: dict) -> dict:
         out["verdict"] = job["verdict"]
         out["violations"] = job["violations"]
         out["processing_sec"] = job.get("processing_sec")
+        if job.get("partial_result"):
+            out["partial_result"] = True
     elif job["status"] == "failed":
         out["error"] = job.get("error", "")
     else:

@@ -7,6 +7,7 @@
 types:
   - id: left_workplace_unsecured
     name_ru: "Кассир покинул рабочее место, оставив ценности без присмотра"
+    summary_ru: "Кассир встаёт и уходит, а на столе остаются деньги/сумка, открыт сейф или не заблокирован экран компьютера."
     definition: >-
       The cashier stands up and walks away from the cash desk while valuables stay unsecured:
       cash or a cash bag left on the desk, the safe / cash drawer left open, or the computer
@@ -21,6 +22,7 @@ types:
 
   - id: outsider_in_cash_area
     name_ru: "Посторонний в кассовой зоне"
+    summary_ru: "Человек, не являющийся кассиром, заходит на сторону кассира, к сейфу или к деньгам."
     definition: >-
       A person who is not the cashier enters the cashier's side of the counter, the cash room
       or approaches the safe / cash on the cashier's side, or stays there.
@@ -33,16 +35,21 @@ types:
 
   - id: personal_items_phone
     name_ru: "Личные вещи, телефон или еда на рабочем месте кассира"
+    summary_ru: "Кассир пользуется смартфоном, ест или пьёт, на кассовом столе лежат верхняя одежда или сумка."
     definition: >-
       The cashier uses a mobile phone, or personal items (handbag, phone, food, drink, cups)
       are placed on the cash desk next to the money while cash operations are done.
     not_violation: >-
       Work equipment only: computer, money counter, stamps, documents, calculator.
     why_ru: "Личные вещи и наличные деньги кассира должны храниться вне кассы."
+    # no yes/no re-check: on the full frame it misses a cup or phone, on close-ups it says yes to
+    # everything (measured, run tl5); the state rules require several consecutive samples instead
+    check: none
     clauses: [nbrk231_personal_items, nbrk231_phone]
 
   - id: cash_left_on_desk
     name_ru: "Наличные оставлены на столе / нарушение порядка работы с наличными при клиенте"
+    summary_ru: "Наличные лежат открыто на столе, и с ними никто не работает (не деньги текущего клиента)."
     definition: >-
       Cash that does not belong to the current client operation is left lying open on the desk,
       or banknotes are handed out / taken without recounting them in front of the client.
@@ -53,6 +60,7 @@ types:
 
   - id: collector_bag_unchecked
     name_ru: "Инкассаторская сумка принята без проверки"
+    summary_ru: "Кассир принимает инкассаторскую сумку, не осмотрев её целостность и пломбу."
     definition: >-
       A collector (cash-in-transit courier) hands over a bag or sealed package and the cashier
       takes it without inspecting the bag and its seal.
@@ -63,6 +71,7 @@ types:
 
   - id: safe_left_open
     name_ru: "Сейф оставлен открытым"
+    summary_ru: "Дверца сейфа или денежный ящик долго остаются открытыми без работы с ними."
     definition: >-
       The safe or cash drawer door stays open while nobody is using it, or is left open when
       the cashier turns away or leaves.
@@ -71,9 +80,35 @@ types:
     why_ru: "Ценности должны храниться в закрытом (запертом) хранилище."
     clauses: [nbrk231_cash_on_desk]
 
+  - id: client_id_not_checked
+    name_ru: "Наличные приняты без проверки документа клиента"
+    summary_ru: "Клиент передаёт деньги, и кассир принимает их, не взяв и не осмотрев удостоверение личности клиента."
+    definition: >-
+      A client hands over banknotes (or puts them on the desk) and the cashier takes and processes the
+      money WITHOUT first receiving and looking at the client's ID card or passport. No card or booklet
+      is handed to the cashier or examined by her before the money.
+    not_violation: >-
+      The client first hands an ID card / passport, the cashier holds it and looks at it, and only then
+      the money is handed over. Also normal: a visit without any money.
+    why_ru: "Перед приёмом или выдачей наличных кассовый работник проводит визуальную идентификацию клиента по документу, удостоверяющему личность."
+    clauses: [nbrk231_id_deposit, nbrk231_id_withdrawal]
+
+  - id: cash_withheld
+    name_ru: "Кассир удержал часть наличных клиента"
+    summary_ru: "Кассир берёт пачку денег клиента, отделяет часть и оставляет её у себя (в руке, на коленях, в кармане), отдавая или обрабатывая только остаток."
+    definition: >-
+      The cashier takes the client's stack of banknotes, separates part of it and keeps that part in
+      her own hand, lap or pocket (out of the client's view), and gives back or processes only the rest.
+    not_violation: >-
+      The whole stack is counted on the desk or in the counting machine in front of the client and all
+      of it is either kept as the deposit or handed back.
+    why_ru: "Наличные принимаются и пересчитываются в присутствии клиента; сумма документа сверяется с фактически принятыми деньгами, выдаваемая сумма пересчитывается при клиенте."
+    clauses: [nbrk231_recount, nbrk231_amount_match, nbrk231_issue_recount]
+
   # Catch-all for unseen types. Needs a higher threshold and must pass the verify pass.
   - id: other
     name_ru: "Иное возможное нарушение кассовой дисциплины"
+    summary_ru: "Иное явно видимое нарушение сохранности ценностей; выводится только после повторной проверки."
     definition: >-
       Any other clearly visible breach of cash-handling security not covered above
       (e.g. cash passed to an unauthorised person, money hidden in clothes, cash room door

@@ -32,6 +32,7 @@ class VLMClient:
         self.cache_dir = cache_dir
         self.use_cache = use_cache
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._tls = threading.local()
 
     # -- public -------------------------------------------------------------------------
     def chat_json(self, model: str, system: str, frames: list[tuple[str, bytes]], question: str,
@@ -57,7 +58,11 @@ class VLMClient:
                     model, system, frames, question, schema, temp, rep)
                 data = _parse_json(text)
                 data["_latency"] = round(time.time() - t0, 2)
-                LATENCY.update(data["_latency"])
+                # GPU time of this call alone (Ollama reports it; queueing behind other jobs excluded)
+                gpu = getattr(self._tls, "gpu_sec", None) or data["_latency"]
+                data["_gpu_sec"] = round(gpu, 2)
+                LATENCY.update(gpu)
+                WALL.update(data["_latency"])
                 self._cache_put(key, data)
                 return data
             except (ValueError, httpx.HTTPError, KeyError) as e:
@@ -87,9 +92,12 @@ class VLMClient:
             payload.pop("think")
             r = httpx.post(f"{self.url}/api/chat", json=payload, timeout=self.timeout)
         r.raise_for_status()
-        return r.json()["message"]["content"]
+        j = r.json()
+        self._tls.gpu_sec = sum(j.get(k, 0) for k in ("load_duration", "prompt_eval_duration", "eval_duration")) / 1e9
+        return j["message"]["content"]
 
     def _openai(self, model, system, frames, question, schema, temp, rep) -> str:
+        self._tls.gpu_sec = None   # not reported: wall time is used
         parts = []
         for label, b in frames:
             parts.append({"type": "text", "text": label})
@@ -149,7 +157,8 @@ class _Latency:
         return self.value if self.value is not None else default
 
 
-LATENCY = _Latency()
+LATENCY = _Latency()   # GPU seconds per call: tier planning multiplies it by the number of jobs
+WALL = _Latency()      # wall seconds per call incl. queueing: per-call "is there time left" checks
 
 
 def _parse_json(text: str) -> dict:

@@ -36,6 +36,7 @@ open_data/
 config/tuned.yaml.bak
 .env
 *.log
+logs/
 .DS_Store
 Thumbs.db
 .vscode/

@@ -8,12 +8,13 @@ vlm:
   temperature: 0.0
   num_ctx: 6144             # 6144 keeps the 8B model 100% on the GPU (8192 spills ~18% to CPU)
   max_tokens: 700            # cap on generated tokens per call
-  timeout_sec: 120
-  sec_per_call_init: 2.0     # initial guess; replaced at runtime by a moving average
+  timeout_sec: 60            # one call; a hung call must not eat the whole 5-minute budget
+  sec_per_call_init: 1.0     # GPU s/call before any is measured (5 parallel jobs measured ~0.8); then a moving average
 
 budget:
   job_deadline_sec: 240      # measured from upload; the jury limit is 300
   reserve_sec: 20            # time kept for evidence frames / response
+  hard_limit_sec: 280        # watchdog: past this, answer with the provisional result (app/jobs.py)
 
 decode:
   fps: 5.0                   # frames kept in memory (JPEG) for every later stage
@@ -25,6 +26,11 @@ timeline:                    # workplace-state samples (main detector, app/timel
   crop_width: 640            # enlarged desk crop width
   personal_min_samples: 2    # personal items seen in >= N samples (one missed sample allowed in a run)
   safe_min_samples: 4        # safe open in >= N consecutive samples (~6 s)
+  hands_width: 768          # close-up width for the hands question
+  phone_min_samples: 3       # consecutive samples (see app/timeline.py for the measurements)
+  eat_min_samples: 2
+  coat_min_samples: 3
+  cash_min_samples: 4
 
 scan:                        # open-ended scan windows (types the state rules don't cover)
   window_sec: 10.0
@@ -49,6 +55,8 @@ perception:
   min_absence_sec: 3.0
   crowd_min_people: 3
   crowd_min_sec: 2.0
+  min_person_height: 0.12    # boxes smaller than this (fraction of frame height) are reflections / far away
+  count_score: 0.8           # people counted for the outsider check (reflections score ~0.6)
 
 fusion:
   merge_gap_sec: 5.0
@@ -61,6 +69,7 @@ fusion:
     verify: 0.5              # how much a positive check raises the score
   verify_fail_penalty: 0.5   # score multiplier when the check says "not visible"
   verify_alone: 0.8          # a positive check alone scores at least 0.8 * its confidence
+  single_person_factor: 0.3  # outsider candidate with only one person ever visible (app/pipeline.py)
   thresholds:
     default: 0.5
     other: 0.75
@@ -70,8 +79,10 @@ fusion:
 # Degradation tiers, tried in order; the first whose estimated cost fits the remaining budget is
 # used. Cost = estimated VLM calls * seconds per call * max(1, active_jobs / ollama_parallel).
 tiers:
-  - {name: full,    state_every_sec: 1.5, scan: true,  verify: true}
-  - {name: lighter, state_every_sec: 2.5, scan: true,  verify: true}
-  - {name: light,   state_every_sec: 3.5, scan: false, verify: true}
-  - {name: minimal, state_every_sec: 5.0, scan: false, verify: false}
+# `hands`: the second per-sample question (phone / food / drink / loose cash), doubles the timeline cost.
+  - {name: full,    state_every_sec: 1.5, hands: true,  scan: true,  verify: true}
+  - {name: lighter, state_every_sec: 2.5, hands: true,  scan: true,  verify: true}
+  - {name: light,   state_every_sec: 3.5, hands: true,  scan: false, verify: true}
+  - {name: compact, state_every_sec: 5.0, hands: true,  scan: false, verify: false}
+  - {name: minimal, state_every_sec: 5.0, hands: false, scan: false, verify: false}
 ollama_parallel: 1           # must match OLLAMA_NUM_PARALLEL (2 does not fit next to the 8B model in 12 GB)

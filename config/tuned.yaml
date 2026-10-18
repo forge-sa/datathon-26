@@ -1,4 +1,5 @@
-# written by tools/tune.py --run tl4; delete to fall back to settings.yaml
+# Fusion settings chosen on run tl7 (tools/tune.py --run tl7 + manual check); delete to fall back to settings.yaml.
+# all 40 clips: acc 72%, recall 62%, specificity 84%; leave-one-setup-out CV: acc 68%.
 fusion:
   thresholds:
     default: 0.7
@@ -11,5 +12,6 @@ fusion:
     verify: 0.3
   verify_fail_penalty: 1.0
   verify_alone: 0.8
-  use_onset: true
+  single_person_factor: 0.3
+  use_onset: false
   time_offset: {}

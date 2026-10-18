@@ -48,8 +48,10 @@ def predict(recs: list[dict], fcfg: dict) -> dict[str, list[dict]]:
     return preds
 
 
-TUNED_KEYS = ["thresholds", "weights", "verify_fail_penalty", "verify_alone", "use_onset", "time_offset"]
-TYPE_THRESHOLDS = ["left_workplace_unsecured", "outsider_in_cash_area", "personal_items_phone", "safe_left_open"]
+TUNED_KEYS = ["thresholds", "weights", "verify_fail_penalty", "verify_alone", "use_onset", "time_offset",
+              "single_person_factor"]
+TYPE_THRESHOLDS = ["left_workplace_unsecured", "outsider_in_cash_area", "personal_items_phone", "safe_left_open",
+                   "cash_left_on_desk", "collector_bag_unchecked"]
 
 
 def grid(base: dict):

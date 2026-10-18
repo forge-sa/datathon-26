@@ -7,103 +7,225 @@
 <style>
   :root {
     --bg: #f4f5f2; --panel: #ffffff; --ink: #1b1d1a; --muted: #6b6f68; --line: #e1e3dd;
-    --accent: #0f6b4f; --bad: #b3261e; --bad-bg: #fbe9e7; --ok: #1d6b2f; --ok-bg: #e6f2e7;
+    --accent: #0f6b4f; --accent-bg: #eef6f2; --bad: #b3261e; --bad-bg: #fbe9e7; --ok: #1d6b2f; --ok-bg: #e6f2e7;
+    --warn: #8a5a00; --warn-bg: #fdf3dc;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font: 15px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif; }
-  header { padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
-           display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header { padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
+           display: flex; align-items: center; gap: 18px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
   header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  header .health { font-size: 13px; color: var(--muted); }
-  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; display: grid;
-         grid-template-columns: minmax(280px, 380px) 1fr; gap: 24px; }
-  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  nav { display: flex; gap: 4px; }
+  nav button { background: transparent; color: var(--muted); border: 0; padding: 6px 12px; border-radius: 6px; }
+  nav button.on { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  header .health { font-size: 13px; color: var(--muted); margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: #2e9d55; } .dot.bad { background: var(--bad); }
+  main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 60px; }
+  .grid { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .panel + .panel { margin-top: 16px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
   .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px 12px; text-align: center;
           color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s; }
-  .drop.over { border-color: var(--accent); background: #eef6f2; }
-  .drop strong { color: var(--ink); }
+  .drop.over, .drop:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .drop strong { color: var(--ink); word-break: break-all; }
   button { font: inherit; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--accent);
            background: var(--accent); color: #fff; cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
   button.ghost { background: transparent; color: var(--accent); }
-  video { width: 100%; max-height: 70vh; background: #000; border-radius: 8px; margin-top: 12px; }
+  button.small { padding: 4px 10px; font-size: 13px; }
+  video { width: 100%; max-height: 62vh; background: #000; border-radius: 8px; margin-top: 12px; display: block; }
+  .track { position: relative; height: 18px; margin-top: 6px; background: #eceee9; border-radius: 4px; }
+  .track .mk { position: absolute; top: 0; width: 4px; height: 18px; background: var(--bad); border-radius: 2px;
+               transform: translateX(-2px); cursor: pointer; }
+  .track .mk:hover { width: 6px; transform: translateX(-3px); }
   .status { margin-top: 12px; font-size: 14px; color: var(--muted); min-height: 1.5em; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
   .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line);
              border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite;
              vertical-align: -1px; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .verdict { padding: 14px 16px; border-radius: 10px; font-weight: 600; font-size: 17px; margin-bottom: 16px; }
+  .verdict { padding: 14px 16px; border-radius: 10px; font-weight: 600; font-size: 18px; margin-bottom: 8px;
+             display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .verdict small { font-weight: 400; font-size: 13px; }
   .verdict.bad { background: var(--bad-bg); color: var(--bad); }
   .verdict.ok { background: var(--ok-bg); color: var(--ok); }
-  .note { font-size: 13px; color: var(--muted); margin: -8px 0 16px; }
+  .note { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  .warn { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
   .viol { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; background: var(--panel); }
-  .viol h3 { margin: 0 0 6px; font-size: 16px; }
+  .viol h3 { margin: 0 0 6px; font-size: 16px; display: flex; gap: 10px; align-items: baseline; }
+  .viol h3 .n { color: var(--muted); font-weight: 400; }
   .meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
-  .tc { font-variant-numeric: tabular-nums; padding: 3px 9px; font-size: 13px; }
+  .tc { font-variant-numeric: tabular-nums; padding: 3px 10px; font-size: 13px; }
+  .conf { display: inline-flex; align-items: center; gap: 6px; }
+  .conf i { display: inline-block; width: 60px; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .conf i b { display: block; height: 100%; background: var(--accent); }
   .desc { margin: 10px 0; }
-  .frames { display: flex; gap: 8px; overflow-x: auto; }
+  .frames { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
   .frames figure { margin: 0; flex: 0 0 auto; }
-  .frames img { height: 220px; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  .frames img { height: 230px; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
   .frames figcaption { font-size: 12px; color: var(--muted); text-align: center; }
   .rules { font-size: 13px; background: #f7f8f5; border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
-  .rules a { color: var(--accent); }
-  details { margin-top: 18px; }
-  details pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #f7f8f5;
-                padding: 10px; border-radius: 8px; max-height: 480px; overflow: auto; }
+  .rules div + div { margin-top: 6px; }
+  .rules .q { color: var(--muted); }
+  a { color: var(--accent); }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #f7f8f5;
+        padding: 10px; border-radius: 8px; max-height: 480px; overflow: auto; }
+  code { background: #f0f1ed; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
   .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+  .tag { font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+  .tag.bad { background: var(--bad-bg); color: var(--bad); } .tag.ok { background: var(--ok-bg); color: var(--ok); }
+  .tag.run { background: var(--accent-bg); color: var(--accent); } .tag.fail { background: #eee; color: var(--muted); }
+  .types { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  .types .panel + .panel { margin-top: 0; }
+  .types h3 { margin: 0 0 4px; font-size: 15px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   .zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; align-items: center;
           justify-content: center; z-index: 10; cursor: zoom-out; }
   .zoom img { max-width: 95vw; max-height: 95vh; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Кассовый аудит · проверка видео</h1>
-  <span class="health" id="health">проверка сервиса…</span>
+  <h1>Кассовый аудит</h1>
+  <nav>
+    <button data-tab="check" class="on">Проверка видео</button>
+    <button data-tab="types">Типы нарушений и нормы</button>
+    <button data-tab="api">API</button>
+  </nav>
+  <span class="health"><span class="dot" id="hdot"></span><span id="health">проверка сервиса…</span></span>
 </header>
+
 <main>
-  <section>
-    <div class="panel">
-      <div class="drop" id="drop">
-        <strong>Перетащите видео .mov</strong><br>или нажмите, чтобы выбрать файл
-        <input type="file" id="file" accept=".mov,.mp4,video/*" hidden>
+  <!-- ============ check ============ -->
+  <div id="tab-check" class="grid">
+    <section>
+      <div class="panel">
+        <div class="drop" id="drop">
+          <strong>Перетащите видео .mov</strong><br>или нажмите, чтобы выбрать файл
+          <input type="file" id="file" accept=".mov,.mp4,video/quicktime,video/mp4" hidden>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button id="go" disabled>Проверить</button>
+          <button id="reset" class="ghost" hidden>Новая проверка</button>
+        </div>
+        <div class="status" id="status"></div>
+        <div class="bar" id="bar" hidden><div></div></div>
+        <video id="player" controls hidden playsinline></video>
+        <div class="track" id="track" hidden title="Отметки найденных событий — нажмите, чтобы перейти"></div>
       </div>
-      <div style="margin-top:12px; display:flex; gap:8px;">
-        <button id="go" disabled>Проверить</button>
-        <button id="reset" class="ghost" hidden>Новая проверка</button>
-      </div>
-      <div class="status" id="status"></div>
-      <video id="player" controls hidden playsinline></video>
+    </section>
+    <section id="result"><div class="panel empty">Загрузите видео, чтобы увидеть результат анализа.<br>
+      Анализ занимает от 20 секунд до 4 минут в зависимости от длины ролика.</div></section>
+  </div>
+
+  <!-- ============ types ============ -->
+  <div id="tab-types" hidden>
+    <div class="panel" style="margin-bottom:16px">
+      <h2>Как сопоставляются правила и видео</h2>
+      <p class="note" style="margin:0">Сервис каждые 1,5 с читает состояние рабочего места (кассир на месте, кто за стойкой,
+        что лежит на столе и в руках кассира, экран, сейф) и по изменениям состояния находит события. Для каждого типа события
+        заранее выбраны пункты нормативных актов РК; цитаты взяты дословно из официальных текстов (adilet.zan.kz), модель
+        ссылки не придумывает. Нарушения, для вывода о которых нужны невидимые на видео данные (проводки, сверки), не утверждаются.</p>
     </div>
-  </section>
-  <section id="result"><div class="panel empty">Загрузите видео, чтобы увидеть результат анализа.</div></section>
+    <div class="types" id="types"><div class="panel empty">загрузка…</div></div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Нормативные источники</h2>
+      <div id="sources"></div>
+    </div>
+  </div>
+
+  <!-- ============ api ============ -->
+  <div id="tab-api" hidden>
+    <div class="panel">
+      <h2>API для автоматической проверки</h2>
+      <p>Доступ по ключу в заголовке <code>X-API-Key</code>. Обработка асинхронная, в два шага.</p>
+      <table>
+        <tr><th>Метод</th><th>Путь</th><th>Назначение</th></tr>
+        <tr><td>POST</td><td><code>/api/v1/analyze</code></td><td>Загрузить видео .mov (multipart, поле <code>file</code>). Ответ: <code>{"job_id", "status": "processing"}</code></td></tr>
+        <tr><td>GET</td><td><code>/api/v1/jobs/{job_id}</code></td><td>Статус <code>processing</code> / <code>done</code> / <code>failed</code> и результат</td></tr>
+        <tr><td>GET</td><td><code>/api/v1/health</code></td><td>Готовность модели и число задач в работе</td></tr>
+      </table>
+      <h2 style="margin-top:18px">Пример</h2>
+      <pre id="curl"></pre>
+      <h2 style="margin-top:18px">Формат результата</h2>
+      <pre>{
+  "job_id": "3f2a9c1e",
+  "status": "done",
+  "verdict": "violation",            // или "no_violation"
+  "violations": [
+    {
+      "type": "Название типа нарушения",
+      "timecode_sec": 44.2,
+      "description": "Что видно на видео и почему это может быть нарушением (с пунктом нормативного акта)",
+      "evidence_frames": [ { "timestamp_sec": 44.2, "image_base64": "/9j/4AAQ..." } ],
+      // дополнительно: type_id, confidence, rules [{act, point, quote, url}]
+    }
+  ]
+}</pre>
+      <p class="note">Видео обрабатывается не дольше 5 минут: при перегрузке сервис снижает детализацию анализа,
+        а по истечении лимита возвращает результат основного детектора (поле <code>partial_result: true</code>).
+        Интерактивная документация: <a href="/docs" target="_blank">/docs</a>.</p>
+    </div>
+  </div>
 </main>
+
 <script>
 const $ = (id) => document.getElementById(id);
-let file = null, jobId = null, timer = null;
+let file = null, jobId = null, timer = null, duration = 0;
 
-fetch('/health').then(r => r.json()).then(h => {
-  $('health').textContent = h.ok ? `модель ${h.model} готова` : `внимание: ${h.vlm}`;
-  $('health').style.color = h.ok ? '' : 'var(--bad)';
-}).catch(() => $('health').textContent = 'сервис недоступен');
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  location.hash = b.dataset.tab === 'check' ? (jobId || '') : b.dataset.tab;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  for (const t of ['check', 'types', 'api']) $('tab-' + t).hidden = t !== b.dataset.tab;
+  if (b.dataset.tab === 'types') loadCatalog();
+});
 
+// ---------- health ----------
+function health() {
+  fetch('/health').then(r => r.json()).then(h => {
+    $('health').textContent = h.ok ? `модель ${h.model} готова` + (h.active_jobs ? ` · в работе: ${h.active_jobs}` : '')
+                                   : `модель недоступна: ${h.vlm}`;
+    $('hdot').className = 'dot ' + (h.ok ? 'ok' : 'bad');
+  }).catch(() => { $('health').textContent = 'сервис недоступен'; $('hdot').className = 'dot bad'; });
+}
+health(); setInterval(health, 15000);
+
+$('curl').textContent =
+`curl -X POST ${location.origin}/api/v1/analyze \\
+     -H "X-API-Key: <ключ>" -F "file=@video_017.mov"
+# → {"job_id": "3f2a9c1e", "status": "processing"}
+
+curl ${location.origin}/api/v1/jobs/3f2a9c1e -H "X-API-Key: <ключ>"`;
+
+// ---------- upload ----------
 function pick(f) {
   if (!f) return;
   file = f;
-  $('drop').innerHTML = `<strong>${f.name}</strong><br>${(f.size / 1048576).toFixed(1)} МБ`;
+  $('drop').innerHTML = `<strong>${esc(f.name)}</strong><br>${(f.size / 1048576).toFixed(1)} МБ · нажмите, чтобы выбрать другой`;
   $('go').disabled = false;
+  showVideo(URL.createObjectURL(f));
+}
+function showVideo(src) {
   const p = $('player');
-  p.src = URL.createObjectURL(new Blob([f], { type: 'video/mp4' }));
-  p.hidden = false;
+  p.src = src; p.hidden = false;
+  p.onloadedmetadata = () => { duration = p.duration; };
 }
 $('drop').onclick = () => $('file').click();
 $('file').onchange = (e) => pick(e.target.files[0]);
 ['dragover', 'dragenter'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
 $('drop').addEventListener('drop', e => pick(e.dataTransfer.files[0]));
-$('reset').onclick = () => location.reload();
+$('reset').onclick = () => { history.replaceState(null, '', '/'); location.reload(); };
 
 $('go').onclick = async () => {
   $('go').disabled = true;
@@ -114,59 +236,157 @@ $('go').onclick = async () => {
     const r = await fetch('/ui/api/analyze', { method: 'POST', body: fd });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || r.statusText);
-    jobId = j.job_id;
-    const t0 = Date.now();
-    timer = setInterval(() => poll(t0), 1500);
+    track(j.job_id, Date.now());
   } catch (e) { setStatus('Ошибка загрузки: ' + e.message); $('go').disabled = false; }
 };
+
+function track(id, t0) {
+  jobId = id;
+  history.replaceState(null, '', '#' + id);
+  $('bar').hidden = false;
+  clearInterval(timer);
+  poll(t0);
+  timer = setInterval(() => poll(t0), 1500);
+}
 
 function setStatus(text, busy) {
   $('status').innerHTML = (busy ? '<span class="spinner"></span>' : '') + text;
 }
 
+// rough progress from the stage text ("Состояние рабочего места: 7/17")
+const STAGES = [['Декодирование', 3], ['Детекция', 6], ['Поиск рабочего', 8], ['Состояние', 10], ['Общий просмотр', 75],
+                ['Проверка кандидатов', 88], ['Готово', 100]];
+function progressPct(msg) {
+  let pct = 2;
+  for (const [k, v] of STAGES) if ((msg || '').startsWith(k)) pct = v;
+  const m = /(\d+)\/(\d+)/.exec(msg || '');
+  if (m && (msg.startsWith('Состояние'))) pct = 10 + 62 * (+m[1] / +m[2]);
+  if (m && (msg.startsWith('Общий'))) pct = 75 + 12 * (+m[1] / +m[2]);
+  return pct;
+}
+
 async function poll(t0) {
-  const r = await fetch(`/ui/api/jobs/${jobId}`);
-  const j = await r.json();
+  let j;
+  try {
+    const r = await fetch(`/ui/api/jobs/${jobId}`);
+    j = r.status === 404 ? { status: 'not_found' } : await r.json();
+  } catch { return; }
   const sec = Math.round((Date.now() - t0) / 1000);
-  if (j.status === 'processing') { setStatus(`Обработка: ${j.progress || ''} · ${sec} с`, true); return; }
+  if (j.status === 'processing') {
+    setStatus(`Обработка: ${esc(j.progress || 'в очереди')} · ${sec} с`, true);
+    $('bar').firstElementChild.style.width = progressPct(j.progress) + '%';
+    return;
+  }
   clearInterval(timer);
+  $('bar').hidden = true;
   $('reset').hidden = false;
-  if (j.status === 'failed') { setStatus('Ошибка обработки: ' + j.error); return; }
+  if (j.status === 'failed') { setStatus('Ошибка обработки: ' + esc(j.error)); return; }
+  if (j.status === 'not_found') { setStatus('Задание не найдено'); return; }
   setStatus(`Готово за ${j.processing_sec ?? sec} с · задание ${jobId}`);
   render(j);
 }
 
-function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+// ---------- result ----------
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function fmt(t) { const m = Math.floor(t / 60), s = (t % 60).toFixed(1).padStart(4, '0'); return `${m}:${s}`; }
-function seek(t) { const p = $('player'); p.currentTime = t; p.pause(); p.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function seek(t) { const p = $('player'); if (p.hidden) return; p.currentTime = t; p.pause(); p.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 function zoom(src) { const d = document.createElement('div'); d.className = 'zoom'; d.innerHTML = `<img src="${src}">`; d.onclick = () => d.remove(); document.body.appendChild(d); }
 
+function markers(vs) {
+  const tr = $('track');
+  const draw = () => {
+    const d = $('player').duration || duration;
+    if (!d || !vs.length) { tr.hidden = true; return; }
+    tr.hidden = false;
+    tr.innerHTML = vs.map((v, i) => `<span class="mk" style="left:${(100 * v.timecode_sec / d).toFixed(2)}%"
+        title="${i + 1}. ${esc(v.type)} — ${fmt(v.timecode_sec)}" onclick="seek(${v.timecode_sec})"></span>`).join('');
+  };
+  if ($('player').readyState >= 1) draw(); else $('player').addEventListener('loadedmetadata', draw, { once: true });
+}
+
+// the API description carries the regulation quotes (the jury sees only the JSON); on screen they are
+// shown in the "rule and source" box, so drop them from the text
+function shortDesc(v) {
+  const d = v.description || '';
+  if (!(v.rules || []).length) return d;
+  return d.replace(/\s*Основание:.*?(?=Результат является|$)/s, ' ').trim();
+}
+
+let lastJson = null;
 function render(j) {
+  lastJson = j;
   const bad = j.verdict === 'violation';
-  let html = `<div class="verdict ${bad ? 'bad' : 'ok'}">${bad ? 'Обнаружены признаки возможных нарушений' : 'Нарушение не обнаружено'}</div>
-    <p class="note">Результат — подсказка для проверяющего, а не окончательное заключение.</p>`;
-  for (const v of j.violations) {
-    const frames = v.evidence_frames.map(f => `<figure><img src="data:image/jpeg;base64,${f.image_base64}" onclick="zoom(this.src)">
-      <figcaption>${fmt(f.timestamp_sec)}</figcaption></figure>`).join('');
-    const rules = (v.rules || []).map(r => `<div><b>${esc(r.act)}</b>, ${esc(r.point)}${r.quote ? ': «' + esc(r.quote) + '»' : ''}
-      ${r.url ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener">источник</a>` : ''}</div>`).join('');
+  const n = j.violations.length;
+  let html = `<div class="verdict ${bad ? 'bad' : 'ok'}">
+      <span>${bad ? 'Обнаружены признаки возможных нарушений' : 'Нарушение не обнаружено'}</span>
+      ${bad ? `<small>событий: ${n}</small>` : ''}</div>
+    <p class="note">Результат — подсказка для проверяющего, а не окончательное юридическое или дисциплинарное заключение.</p>`;
+  if (j.partial_result) html += `<div class="warn">Анализ сокращён из-за ограничения времени: показан результат основного детектора.</div>`;
+  j.violations.forEach((v, i) => {
+    const frames = v.evidence_frames.map(f => `<figure><img src="data:image/jpeg;base64,${f.image_base64}" onclick="zoom(this.src)" alt="кадр ${fmt(f.timestamp_sec)}">
+      <figcaption>кадр ${fmt(f.timestamp_sec)}</figcaption></figure>`).join('');
+    const rules = (v.rules || []).map(r => `<div><b>${esc(r.point)}</b> — ${esc(r.act)}
+      ${r.url ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener">текст акта</a>` : ''}
+      ${r.quote ? `<div class="q">«${esc(r.quote)}»</div>` : ''}</div>`).join('');
+    const conf = Math.round((v.confidence ?? 0) * 100);
     html += `<div class="viol">
-      <h3>${esc(v.type)}</h3>
-      <div class="meta"><button class="tc ghost" onclick="seek(${v.timecode_sec})">▶ ${fmt(v.timecode_sec)}</button>
-        <span>уверенность ${(v.confidence * 100).toFixed(0)}%</span></div>
-      <p class="desc">${esc(v.description)}</p>
+      <h3><span class="n">${i + 1}.</span> ${esc(v.type)}</h3>
+      <div class="meta"><button class="tc ghost" onclick="seek(${v.timecode_sec})" title="Перейти к моменту в видео">▶ ${fmt(v.timecode_sec)} · ${v.timecode_sec.toFixed(1)} с</button>
+        <span class="conf">уверенность <i><b style="width:${conf}%"></b></i> ${conf}%</span></div>
+      <p class="desc">${esc(shortDesc(v))}</p>
       <div class="frames">${frames}</div>
-      ${rules ? `<div class="rules">${rules}</div>` : ''}
+      ${rules ? `<div class="rules"><b>Правило и нормативный источник</b>${rules}</div>` : ''}
     </div>`;
-  }
-  html += `<details id="dbg"><summary>Технические детали (для настройки)</summary><pre id="dbgpre">загрузка…</pre></details>
-    <details><summary>JSON ответа API</summary><pre>${esc(JSON.stringify(j, (k, v) => k === 'image_base64' ? v.slice(0, 40) + '…' : v, 1))}</pre></details>`;
+  });
+  if (!bad) html += `<div class="panel note" style="margin:0">Признаков нарушений из перечня (см. «Типы нарушений и нормы») на видео не найдено.</div>`;
+  html += `<details><summary>JSON ответа API</summary>
+      <div style="margin:8px 0"><button class="small ghost" onclick="copyJson()">Скопировать JSON</button></div>
+      <pre>${esc(JSON.stringify(j, (k, v) => k === 'image_base64' ? v.slice(0, 40) + '…' : v, 1))}</pre></details>
+    <details id="dbg"><summary>Технические детали (для настройки)</summary><pre id="dbgpre">загрузка…</pre></details>`;
   $('result').innerHTML = html;
+  markers(j.violations);
   $('dbg').addEventListener('toggle', async () => {
-    const d = await (await fetch(`/ui/api/jobs/${jobId}/debug`)).json();
-    $('dbgpre').textContent = JSON.stringify(d, null, 1);
+    try {
+      const d = await (await fetch(`/ui/api/jobs/${jobId}/debug`)).json();
+      $('dbgpre').textContent = JSON.stringify(d, null, 1);
+    } catch { $('dbgpre').textContent = 'нет данных'; }
   }, { once: true });
 }
+
+function copyJson() {
+  navigator.clipboard.writeText(JSON.stringify(lastJson, null, 1)).then(() => setStatus('JSON скопирован'));
+}
+
+function openJob(id) {
+  file = null;
+  $('drop').innerHTML = '<strong>Перетащите видео .mov</strong><br>или нажмите, чтобы выбрать файл';
+  $('go').disabled = true;
+  showVideo(`/ui/api/jobs/${id}/video`);
+  track(id, Date.now());
+}
+
+// ---------- catalog ----------
+let catalogLoaded = false;
+async function loadCatalog() {
+  if (catalogLoaded) return;
+  const c = await (await fetch('/ui/api/catalog')).json();
+  catalogLoaded = true;
+  $('types').innerHTML = c.types.map(t => `<div class="panel">
+      <h3>${esc(t.name)}</h3>
+      <p style="margin:4px 0 8px">${esc(t.summary)}</p>
+      <p class="note" style="margin:0 0 8px">${esc(t.why)}</p>
+      <div class="rules">${t.clauses.map(r => `<div><b>${esc(r.point)}</b> — ${esc(r.act)}
+        ${r.url ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener">текст</a>` : ''}
+        <div class="q">«${esc(r.quote)}»</div></div>`).join('')}</div>
+    </div>`).join('');
+  $('sources').innerHTML = '<table>' + c.sources.map(s => `<tr><td>${esc(s.title)}<br><span class="note">${esc(s.version)}</span></td>
+      <td>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">adilet.zan.kz</a>` : ''}</td></tr>`).join('') + '</table>';
+}
+
+// ---------- start ----------
+const h0 = location.hash.slice(1);
+if (h0 === 'types' || h0 === 'api') document.querySelector(`nav button[data-tab="${h0}"]`).click();
+else if (h0) openJob(h0);
 </script>
 </body>
 </html>
